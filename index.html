@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="my">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>WY App Store</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-remote-config-compat.js"></script>
+
+<style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; overflow-x: hidden; -webkit-tap-highlight-color: transparent; }
+
+        .search-header {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+            background: #2563eb; padding: 12px 16px;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+            pointer-events: auto;
+        }
+
+        #search-input {
+            background-color: rgba(255, 255, 255, 1);
+            color: #1e293b;
+            cursor: text;
+            pointer-events: auto;
+            border: none;
+            outline: none;
+            z-index: 1001;
+        }
+        #search-input::placeholder { color: #64748b; }
+
+        main { padding-top: 85px; padding-bottom: 90px; position: relative; z-index: 10; }
+
+        .featured-container {
+            display: flex; overflow-x: auto; scroll-snap-type: x mandatory;
+            gap: 15px; padding: 5px 15px 15px; scrollbar-width: none;
+        }
+        .featured-container::-webkit-scrollbar { display: none; }
+        .featured-card {
+            min-width: 88%; scroll-snap-align: center; border-radius: 24px;
+            height: 180px; position: relative; overflow: hidden;
+            background-size: cover; background-position: center;
+            box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+        }
+        .featured-overlay {
+            position: absolute; inset: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 60%);
+            display: flex; align-items: flex-end; padding: 20px;
+        }
+
+        .app-card {
+            background: white; border-radius: 22px; padding: 14px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+            border: 1px solid rgba(0,0,0,0.03);
+            text-align: center;
+        }
+
+        .bottom-nav {
+            position: fixed; bottom: 0; left: 0; right: 0; height: 75px;
+            background: rgba(255, 255, 255, 0.95); display: flex; 
+            justify-content: space-around; align-items: center; 
+            border-top: 1px solid #f1f5f9; z-index: 500;
+            backdrop-filter: blur(15px);
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+        .nav-item { 
+            color: #94a3b8; display: flex; flex-direction: column; 
+            align-items: center; font-size: 10px; cursor: pointer; flex: 1;
+        }
+        .nav-item svg { width: 24px; height: 24px; margin-bottom: 4px; fill: currentColor; }
+        .nav-item.active { color: #2563eb; font-weight: 700; }
+
+        #app-modal {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+            z-index: 2000; align-items: flex-end; justify-content: center;
+            backdrop-filter: blur(4px);
+        }
+        .modal-active { display: flex !important; }
+        .modal-content {
+            background: white; width: 100%; max-width: 500px;
+            border-top-left-radius: 32px; border-top-right-radius: 32px;
+            padding: 30px 24px; animation: slideUp 0.4s cubic-bezier(0, 0.55, 0.45, 1);
+        }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+        .download-btn {
+            background: #2563eb; color: white; width: 100%;
+            padding: 16px; border-radius: 18px; font-weight: 700;
+            text-align: center; display: block; text-decoration: none;
+        }
+
+        #toast {
+            visibility: hidden; min-width: 250px; background-color: #333;
+            color: #fff; text-align: center; border-radius: 50px;
+            padding: 16px; position: fixed; z-index: 3000;
+            left: 50%; bottom: 100px; transform: translateX(-50%);
+            opacity: 0; transition: opacity 0.3s;
+        }
+        #toast.show { visibility: visible; opacity: 1; }
+
+        .load-more-btn {
+            background: #eff6ff; color: #2563eb; padding: 12px 24px;
+            border-radius: 16px; font-weight: 700; font-size: 14px;
+            margin: 20px auto; display: block; border: 1px solid #dbeafe;
+        }
+</style>
+  </head>
+  <body>
+
+    <div id="toast">အင်တာနက် မရှိပါ။</div>
+
+    <header class="search-header">
+	  <div class="relative max-w-lg mx-auto">
+		<input type="text" id="search-input" placeholder="အက်ပ်များကိုရှာရန်..." 
+		  class="w-full rounded-2xl py-2.5 pl-11 pr-4">
+		<svg class="absolute left-3.5 top-2.5 w-5 h-5 text-blue-600 opacity-80" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="currentColor"/></svg>
+	  </div>
+    </header>
+
+    <main class="container mx-auto">
+	  <div id="featured-section">
+		<h2 class="text-xl font-bold mb-4 px-4">အထူးအသားပေး</h2>
+		<div id="featured-list" class="featured-container"></div>
+	  </div>
+
+	  <h2 id="section-title" class="text-xl font-bold mt-6 mb-4 px-4">All Apps</h2>
+	  <div id="app-grid" class="app-grid grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 px-4"></div>
+
+      <!-- Load More Section -->
+      <div id="search-footer" class="hidden text-center py-4">
+		<button id="load-more-btn" onclick="loadNextPage()" class="load-more-btn">နောက်ထပ်ကြည့်ရန်</button>
+      </div>
+
+      <div id="loading-spinner" class="hidden text-center py-10">
+		<div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+		<p class="text-sm text-gray-500 mt-2">ရှာဖွေနေပါသည်...</p>
+      </div>
+    </main>
+
+    <nav class="bottom-nav" id="bottom-nav"></nav>
+
+    <div id="app-modal" onclick="if(event.target == this) closeModal()">
+	  <div class="modal-content">
+		<div class="flex justify-between items-start mb-6">
+		  <div class="flex items-center gap-4">
+			<img id="modal-icon" class="w-20 h-20 rounded-2xl shadow-lg bg-gray-50">
+			<div>
+			  <h3 id="modal-name" class="text-xl font-bold text-gray-800"></h3>
+			  <p id="modal-cat" class="text-blue-500 text-sm font-semibold uppercase tracking-wider"></p>
+			</div>
+		  </div>
+		  <button onclick="closeModal()" class="bg-gray-100 rounded-full p-2 text-gray-500">
+			<svg class="w-6 h-6" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" fill="currentColor"/></svg>
+		  </button>
+		</div>
+		<p id="modal-desc" class="text-gray-600 text-sm leading-relaxed mb-8"></p>
+		<a id="modal-link" href="#" target="_blank" class="download-btn">DOWNLOAD ရယူရန်</a>
+	  </div>
+    </div>
+
+<script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBzKTeF5xipsteDpjPIIwA62vy02FFChaA",
+            authDomain: "appstore-dbf29.firebaseapp.com",
+            databaseURL: "https://appstore-dbf29-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "appstore-dbf29",
+            storageBucket: "appstore-dbf29.firebasestorage.app",
+            messagingSenderId: "573751891937",
+            appId: "1:573751891937:web:799245b7f38c255092a4a0"
+        };
+        firebase.initializeApp(firebaseConfig);
+
+        const remoteConfig = firebase.remoteConfig();
+        remoteConfig.settings.minimumFetchIntervalMillis = 0; 
+
+        const iconPaths = {
+            'apps': 'M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z',
+            'movie': 'M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z',
+            'code': 'M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z',
+            'sports_esports': 'M21.58 7.19c-.23-.15-.47-.26-.71-.35C19.36 6.33 17 6 12 6s-7.36.33-8.87.84c-.24.09-.48.2-.71.35-.91.59-1.42 1.54-1.42 2.58V16c0 1.1.9 2 2 2 1.14 0 2.09-.91 2.17-2.04C6.29 15.37 7.7 15 12 15s5.71.37 6.83.96c.08 1.13 1.03 2.04 2.17 2.04 1.1 0 2-.9 2-2V9.77c0-1.04-.51-1.99-1.42-2.58z',
+            'edit_note': 'M3 10h11v2H3v-2zm0-2h11V6H3v2zm0 8h7v-2H3v2z'
+        };
+
+        let staticData = [];
+        let scrapedData = {}; 
+        let currentAppsInGrid = [];
+        let isPreloaded = false;
+        let categories = [
+            { name: "All", icon: "apps", category: "All Apps" },
+            { name: "Game", icon: "sports_esports", category: "Game" },
+            { name: "Social", icon: "movie", category: "Social" },
+            { name: "Tool", icon: "movie", category: "Tool" },
+            { name: "Modified", icon: "edit_note", category: "Modified Apps" }
+        ];
+        let currentFilter = 'All Apps';
+        let isSearching = false;
+
+        let currentSearchQuery = "";
+        let currentSearchOffset = 0;
+        const searchLimit = 30; 
+
+        // --- SPLASH PRELOAD DATA HANDLER ---
+        window.receivePreload = function(sJson, aJson) {
+            if (!isPreloaded) {
+                staticData = sJson.apps || [];
+                scrapedData = aJson || {};
+                isPreloaded = true;
+                renderUI();
+                console.log("Preloaded Data Applied Successfully.");
+            }
+        };
+
+        async function init() {
+            renderNav();
+            // Splash မှ data မလာလျှင် 1.5 စက္ကန့်အကြာတွင် Fallback Fetch လုပ်မည်
+            setTimeout(async () => {
+                if (!isPreloaded) {
+                    try {
+                        await remoteConfig.fetchAndActivate();
+                        const dUrl = remoteConfig.getString('app_data_url');
+                        const aUrl = remoteConfig.getString('aptoide_data_url');
+                        if (dUrl) {
+                            const res = await fetch(dUrl);
+                            const d = await res.json();
+                            staticData = d.apps || [];
+                        }
+                        if (aUrl) {
+                            const res = await fetch(aUrl);
+                            scrapedData = await res.json();
+                        }
+                        renderUI();
+                    } catch (e) { console.error(e); }
+                }
+            }, 1500);
+        }
+
+        function renderNav() {
+            const nav = document.getElementById('bottom-nav');
+            nav.innerHTML = categories.map(item => `
+                <div class="nav-item ${currentFilter === item.category ? 'active' : ''}" onclick="filterApps('${item.category}')">
+                    <svg viewBox="0 0 24 24"><path d="${iconPaths[item.icon] || iconPaths.apps}"/></svg>
+                    <span>${item.name}</span>
+                </div>
+            `).join('');
+        }
+
+        function renderUI() {
+            if (isSearching) return;
+            const grid = document.getElementById('app-grid');
+            const featuredSection = document.getElementById('featured-section');
+            const featuredList = document.getElementById('featured-list');
+            document.getElementById('search-footer').classList.add('hidden');
+
+            let displayApps = [];
+            if (currentFilter === "Modified Apps") {
+                displayApps = staticData.filter(a => a.category === "Modified Apps");
+            } else if (scrapedData[currentFilter]) {
+                displayApps = scrapedData[currentFilter];
+            } else if (currentFilter === "All Apps") {
+                displayApps = scrapedData["All"] || [];
+            }
+
+            currentAppsInGrid = displayApps;
+
+            if (currentFilter === 'All Apps') {
+                featuredSection.classList.remove('hidden');
+                const featured = staticData.filter(a => a.isFeatured);
+                featuredList.innerHTML = featured.map((app) => `
+                    <div class="featured-card" style="background-image: url('${app.bgImageUrl}')" onclick="openModalFromStatic('${app.name.replace(/'/g, "\\'")}')">
+                        <div class="featured-overlay">
+                            <div class="flex items-center gap-3">
+                                <img src="${app.iconUrl}" class="w-12 h-12 rounded-xl border-2 border-white/50">
+                                <div class="text-white">
+                                    <h4 class="font-bold text-lg">${app.name}</h4>
+                                    <p class="text-xs opacity-80">${app.category}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                featuredSection.classList.add('hidden');
+            }
+
+            grid.innerHTML = displayApps.map((app, idx) => `
+                <div class="app-card" onclick="openModalByIndex(${idx})">
+                    <img src="${app.iconUrl || app.icon}" class="w-full aspect-square object-cover rounded-2xl mb-3 shadow-sm bg-gray-50" loading="lazy" onerror="this.src='https://via.placeholder.com/150?text=App'">
+                    <h3 class="font-bold text-gray-800 text-sm truncate px-1">${app.name}</h3>
+                    <p class="text-[10px] text-gray-400 font-bold uppercase mt-1 tracking-wider">${app.category || currentFilter}</p>
+                </div>
+            `).join('');
+        }
+
+        // --- SEARCH LOGIC (LOAD MORE) ---
+        let searchTimeout;
+        const searchInput = document.getElementById('search-input');
+        
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.trim();
+            clearTimeout(searchTimeout);
+            if (query.length > 1) {
+                isSearching = true;
+                currentSearchQuery = query;
+                currentSearchOffset = 0;
+                currentAppsInGrid = [];
+                document.getElementById('featured-section').classList.add('hidden');
+                document.getElementById('section-title').innerText = "ရှာဖွေမှုရလဒ်များ";
+                document.getElementById('loading-spinner').classList.remove('hidden');
+                document.getElementById('search-footer').classList.add('hidden');
+                searchTimeout = setTimeout(() => fetchAptoideSearch(query, false), 600);
+            } else if (query.length === 0) {
+                isSearching = false;
+                document.getElementById('loading-spinner').classList.add('hidden');
+                document.getElementById('search-footer').classList.add('hidden');
+                filterApps(currentFilter);
+            }
+        });
+
+        async function fetchAptoideSearch(query, isLoadMore = false) {
+            const grid = document.getElementById('app-grid');
+            const apiUrl = `https://ws75.aptoide.com/api/7/apps/search?query=${encodeURIComponent(query)}&limit=${searchLimit}&offset=${currentSearchOffset}`;
+
+            try {
+                const res = await fetch(apiUrl);
+                const result = await res.json();
+                const items = result.datalist ? result.datalist.list : (result.data ? result.data.list : []);
+
+                document.getElementById('loading-spinner').classList.add('hidden');
+                if (!items || items.length === 0) {
+                    if (!isLoadMore) grid.innerHTML = '<p class="col-span-full text-center py-20 text-gray-500">ရှာမတွေ့ပါ။</p>';
+                    document.getElementById('search-footer').classList.add('hidden');
+                    return;
+                }
+
+                const newApps = items.map(app => ({
+                    name: app.name,
+                    iconUrl: app.graphic || app.icon,
+                    downloadUrl: app.file ? app.file.path : "", 
+                    category: "Novanex",
+                    description: "Novanex Store မှ ရယူထားခြင်းဖြစ်သည်။"
+                }));
+
+                const startIdx = currentAppsInGrid.length;
+                currentAppsInGrid = [...currentAppsInGrid, ...newApps];
+
+                const htmlString = newApps.map((app, idx) => `
+                    <div class="app-card" onclick="openModalByIndex(${startIdx + idx})">
+                        <img src="${app.iconUrl}" class="w-full aspect-square object-cover rounded-2xl mb-3 shadow-sm bg-gray-100" onerror="this.src='https://via.placeholder.com/150?text=App'">
+                        <h3 class="font-bold text-gray-800 text-sm truncate px-1">${app.name}</h3>
+                        <p class="text-[10px] text-blue-500 font-bold uppercase mt-1 tracking-widest">Novanex</p>
+                    </div>
+                `).join('');
+
+                if (isLoadMore) grid.insertAdjacentHTML('beforeend', htmlString);
+                else grid.innerHTML = htmlString;
+
+                // Show "Load More" button if items returned
+                if (items.length >= 12) document.getElementById('search-footer').classList.remove('hidden');
+                else document.getElementById('search-footer').classList.add('hidden');
+
+            } catch (err) {
+                document.getElementById('loading-spinner').classList.add('hidden');
+                console.error(err);
+            }
+        }
+
+        function loadNextPage() {
+            currentSearchOffset += searchLimit;
+            document.getElementById('loading-spinner').classList.remove('hidden');
+            document.getElementById('search-footer').classList.add('hidden');
+            fetchAptoideSearch(currentSearchQuery, true);
+        }
+
+        function filterApps(cat) {
+            currentFilter = cat;
+            isSearching = false;
+            searchInput.value = '';
+            document.getElementById('section-title').innerText = cat;
+            document.getElementById('search-footer').classList.add('hidden');
+            renderNav();
+            renderUI();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function openModalFromStatic(name) {
+            const app = staticData.find(a => a.name === name);
+            if(app) showModal(app);
+        }
+
+        function openModalByIndex(index) {
+            const app = currentAppsInGrid[index];
+            if(app) showModal(app);
+        }
+
+        function showModal(app) {
+            document.getElementById('modal-icon').src = app.iconUrl || app.icon;
+            document.getElementById('modal-name').innerText = app.name;
+            document.getElementById('modal-cat').innerText = app.category || "App";
+            document.getElementById('modal-desc').innerText = app.description || 'ဤအက်ပ်အတွက် အသေးစိတ် ဖော်ပြချက်မရှိသေးပါ။';
+            document.getElementById('modal-link').href = app.downloadUrl || app.link;
+            document.getElementById('app-modal').classList.add('modal-active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() {
+            document.getElementById('app-modal').classList.remove('modal-active');
+            document.body.style.overflow = 'auto';
+        }
+
+        init();
+</script>
+  </body>
+</html>
